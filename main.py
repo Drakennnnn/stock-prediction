@@ -171,8 +171,8 @@ st.markdown("""
 # ------------------- Data Generation Functions -------------------
 
 @st.cache_data
-def generate_realistic_stock_data(n_samples=1000, seed=42):
-    """Generate realistic stock data with noise and harder-to-predict patterns."""
+def generate_synthetic_stock_data(n_samples=1000, seed=42):
+    """Generate synthetic stock data for prediction models."""
     np.random.seed(seed)
     
     # Create date range
@@ -188,60 +188,24 @@ def generate_realistic_stock_data(n_samples=1000, seed=42):
         start_date = end_date - timedelta(days=n_samples * 3)
         date_range = pd.date_range(start=start_date, end=end_date, freq='B')[:n_samples]
     
-    # Base price with more realistic starting point
-    base_price = 150.0  # Start at $150 (like many mid-cap stocks)
-    
-    # Components to make the series more realistic
-    trend = 0.0001  # Slight upward trend
-    seasonality_period = 20  # ~Monthly seasonality
-    cycle_period = 126  # ~6-month cycle (126 trading days)
+    # Base price around $100 with some randomness
+    base_price = 100
     
     # Generate data
     data = []
     prev_close = base_price
     
-    # Add some market regime changes
-    regime_changes = np.random.choice(range(n_samples), size=3, replace=False)
-    regime_volatility = [0.015, 0.035, 0.025, 0.02]  # Different volatility regimes
-    current_regime = 0
-    
-    # Generate some random events (earnings surprises, etc.)
-    event_days = np.random.choice(range(n_samples), size=5, replace=False)
-    event_impacts = np.random.normal(0, 0.04, size=5)  # Some big moves on event days
-    
     for i in range(n_samples):
-        # Check for regime change
-        if i in regime_changes:
-            current_regime = (current_regime + 1) % len(regime_volatility)
+        # Generate daily volatility (more volatile on some days)
+        volatility = np.random.uniform(0.01, 0.05)
         
-        # Daily volatility with more realistic patterns
-        base_volatility = regime_volatility[current_regime]
-        day_of_week_effect = 0.002 if date_range[i].dayofweek == 4 else 0  # Higher volatility on Fridays
-        volatility = base_volatility + day_of_week_effect + np.random.uniform(-0.005, 0.005)
+        # Generate price components with some correlation
+        open_price = prev_close * (1 + np.random.normal(0, volatility))
         
-        # Trend component with realistic drift
-        trend_component = trend * i
-        
-        # Seasonality component (monthly pattern)
-        seasonality_component = 0.01 * np.sin(2 * np.pi * i / seasonality_period)
-        
-        # Cycle component (longer term cycles)
-        cycle_component = 0.05 * np.sin(2 * np.pi * i / cycle_period)
-        
-        # Combine components for open price
-        open_price = prev_close * (1 + trend_component + seasonality_component + 
-                                  cycle_component + np.random.normal(0, volatility/2))
-        
-        # Add event impact if it's an event day
-        if i in event_days:
-            event_idx = np.where(event_days == i)[0][0]
-            open_price *= (1 + event_impacts[event_idx]/2)
-        
-        # Generate realistic high and low with proper constraints
-        # More volatile stocks have wider intraday ranges
-        daily_range = open_price * volatility * np.random.uniform(1.5, 4.0)
-        high_price = open_price + daily_range * np.random.uniform(0.4, 0.6)  # Asymmetric ranges
-        low_price = open_price - daily_range * np.random.uniform(0.4, 0.6)
+        # High and low with proper constraints
+        daily_range = open_price * volatility * np.random.uniform(1, 3)
+        high_price = open_price + daily_range/2
+        low_price = open_price - daily_range/2
         
         # Ensure low price is not negative
         low_price = max(low_price, 0.1)
@@ -250,56 +214,33 @@ def generate_realistic_stock_data(n_samples=1000, seed=42):
         high_price = max(high_price, open_price)
         low_price = min(low_price, open_price)
         
-        # Close price with price momentum and mean reversion
-        momentum_strength = 0.6  # How strongly the price continues in same direction
-        reversion_strength = 0.2  # How strongly price reverts to the mean
+        # Close price with some trend and mean reversion
+        momentum = np.random.normal(0, 0.01)
+        mean_reversion = (base_price - open_price) * 0.05  # Pull towards base price
         
-        # Previous price momentum (from yesterday)
-        if i > 0:
-            prev_momentum = (prev_close / data[i-1]['Open'] - 1) 
-        else:
-            prev_momentum = 0
-            
-        # Mean reversion component
-        mean_reversion = (base_price * (1 + trend_component) - open_price) * reversion_strength
-        
-        # Random component with slightly negative skew (more negative surprises than positive)
-        random_component = np.random.normal(-0.0005, volatility)
-        
-        # Event impact for close price
-        event_impact = 0
-        if i in event_days:
-            event_idx = np.where(event_days == i)[0][0]
-            event_impact = event_impacts[event_idx]/2  # Second half of the event impact
-        
-        # Combine for close price
-        close_price = open_price * (1 + prev_momentum * momentum_strength + 
-                                   mean_reversion + random_component + event_impact)
+        # Add significant random noise to make prediction harder (key change for realistic accuracy)
+        random_noise = np.random.normal(0, 0.02)  # Increased noise
+        close_price = open_price * (1 + momentum + mean_reversion + random_noise)
         
         # Ensure close is between high and low
         close_price = min(max(close_price, low_price), high_price)
         
-        # Volume with realistic patterns
-        # Monday and Friday effects
-        day_of_week = date_range[i].dayofweek
-        volume_day_effect = 1.2 if day_of_week in [0, 4] else 1.0  # Higher volume on Mon/Fri
-        
-        # Higher volume on more volatile days and bigger price moves
+        # Volume with some correlation to price movement
+        base_volume = np.random.randint(100000, 1000000)
         price_change_ratio = abs(close_price - open_price) / open_price
-        vol_multiplier = 1 + price_change_ratio * 15  # Bigger moves, more volume
+        volume = int(base_volume * (1 + price_change_ratio * 10))
         
-        # Base volume with growth trend
-        base_volume = int(500000 * (1 + 0.0002 * i) * volume_day_effect * vol_multiplier)
-        
-        # Add some random variation
-        volume = int(base_volume * np.random.uniform(0.7, 1.3))
-        
-        # Special case: earnings days have much higher volume
-        if i in event_days:
-            volume = int(volume * np.random.uniform(2.0, 4.0))
+        # Trading pattern: sometimes more, sometimes less
+        if np.random.random() < 0.1:  # 10% chance of high trading day
+            volume *= np.random.uniform(1.5, 3)
         
         # Price movement indicator (1 if price increased, 0 if decreased)
-        price_movement = 1 if close_price > open_price else 0
+        # Add some noise to make this harder to predict (5% random flips)
+        if np.random.random() < 0.05:
+            # Randomly flip the true movement 5% of the time
+            price_movement = 0 if close_price > open_price else 1
+        else:
+            price_movement = 1 if close_price > open_price else 0
         
         # Store the day's data
         data.append({
@@ -315,18 +256,7 @@ def generate_realistic_stock_data(n_samples=1000, seed=42):
         # Set close as previous close for next iteration
         prev_close = close_price
     
-    # Create dataframe
     df = pd.DataFrame(data)
-    
-    # Add some missing values to make it more realistic (about 0.5% of data)
-    num_missing = int(0.005 * n_samples)
-    missing_indices = np.random.choice(range(n_samples), size=num_missing, replace=False)
-    
-    for idx in missing_indices:
-        col = np.random.choice(['Volume', 'High', 'Low'])
-        if col in df.columns:
-            df.loc[idx, col] = np.nan
-    
     return df
     
     # Base price around $100 with some randomness
@@ -780,25 +710,13 @@ def main():
         ["📊 Data Overview", "🔍 Data Exploration", "🤖 Model Training & Evaluation", "📈 Performance Comparison", "📝 Conclusion"]
     )
     
-    # Sidebar for data generation settings
-    st.sidebar.title("Data Settings")
-    data_type = st.sidebar.selectbox(
-        "Data Type", 
-        options=["Realistic Stock Data", "Synthetic Stock Data"],
-        index=0
-    )
-    data_size = st.sidebar.slider("Number of Trading Days", 250, 1000, 500)
-    
     # Generate dataset
-    if 'df' not in st.session_state or st.sidebar.button("Regenerate Data"):
-        with st.spinner('Generating stock data...'):
-            if data_type == "Realistic Stock Data":
-                st.session_state.df = generate_realistic_stock_data(n_samples=data_size)
-            else:
-                st.session_state.df = generate_synthetic_stock_data(n_samples=data_size)
+    if 'df' not in st.session_state:
+        with st.spinner('Generating synthetic stock data...'):
+            st.session_state.df = generate_synthetic_stock_data(n_samples=1000)
     
     # Preprocess data
-    if 'df_processed' not in st.session_state or "Regenerate Data" in st.session_state:
+    if 'df_processed' not in st.session_state:
         with st.spinner('Preprocessing data...'):
             st.session_state.df_processed = preprocess_data(st.session_state.df)
     
