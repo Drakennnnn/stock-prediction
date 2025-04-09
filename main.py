@@ -1,83 +1,4 @@
-@st.cache_data
-def generate_synthetic_stock_data(n_samples=1000, seed=42):
-    """Generate synthetic stock data for prediction models."""
-    np.random.seed(seed)
-    
-    # Create date range
-    end_date = datetime.now().date()
-    start_date = end_date - timedelta(days=n_samples * 2)  # Add extra buffer for weekdays
-    # Ensure we have more dates than we need
-    date_range = pd.date_range(start=start_date, end=end_date, freq='B')
-    # Only take the needed number of samples, with a safety check
-    if len(date_range) >= n_samples:
-        date_range = date_range[:n_samples]
-    else:
-        # If we don't have enough business days, extend further back
-        start_date = end_date - timedelta(days=n_samples * 3)
-        date_range = pd.date_range(start=start_date, end=end_date, freq='B')[:n_samples]
-    
-    # Base price around $100 with some randomness
-    base_price = 100
-    
-    # Generate data
-    data = []
-    prev_close = base_price
-    
-    for i in range(n_samples):
-        # Generate daily volatility (more volatile on some days)
-        volatility = np.random.uniform(0.01, 0.05)
-        
-        # Generate price components with some correlation
-        open_price = prev_close * (1 + np.random.normal(0, volatility))
-        
-        # High and low with proper constraints
-        daily_range = open_price * volatility * np.random.uniform(1, 3)
-        high_price = open_price + daily_range/2
-        low_price = open_price - daily_range/2
-        
-        # Ensure low price is not negative
-        low_price = max(low_price, 0.1)
-        
-        # Ensure high > open and low < open
-        high_price = max(high_price, open_price)
-        low_price = min(low_price, open_price)
-        
-        # Close price with some trend and mean reversion
-        momentum = np.random.normal(0, 0.01)
-        mean_reversion = (base_price - open_price) * 0.05  # Pull towards base price
-        close_price = open_price * (1 + momentum + mean_reversion)
-        
-        # Ensure close is between high and low
-        close_price = min(max(close_price, low_price), high_price)
-        
-        # Volume with some correlation to price movement
-        base_volume = np.random.randint(100000, 1000000)
-        price_change_ratio = abs(close_price - open_price) / open_price
-        volume = int(base_volume * (1 + price_change_ratio * 10))
-        
-        # Trading pattern: sometimes more, sometimes less
-        if np.random.random() < 0.1:  # 10% chance of high trading day
-            volume *= np.random.uniform(1.5, 3)
-        
-        # Price movement indicator (1 if price increased, 0 if decreased)
-        price_movement = 1 if close_price > open_price else 0
-        
-        # Store the day's data
-        data.append({
-            'Date': date_range[i],
-            'Open': round(open_price, 2),
-            'High': round(high_price, 2),
-            'Low': round(low_price, 2),
-            'Close': round(close_price, 2),
-            'Volume': volume,
-            'Price_Movement': price_movement
-        })
-        
-        # Set close as previous close for next iteration
-        prev_close = close_price
-    
-    df = pd.DataFrame(data)
-    return dfimport streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -142,24 +63,24 @@ st.markdown("""
         font-weight: bold;
     }
     .highlight {
-        background-color: #f9f9f9 !important;
+        background-color: #333333 !important;
         padding: 15px;
         border-radius: 5px;
         border: 1px solid #e0e0e0;
         margin: 10px 0;
     }
     .highlight p, .highlight li, .highlight ul, .highlight ol {
-        color: #333333 !important;
+        color: #f0f0f0 !important;
     }
     .comparison-table {
         width: 100%;
         text-align: center;
     }
     .comparison-table th {
-        background-color: #f5f5f5;
+        background-color: #333333;
     }
     .comparison-table th, .comparison-table td {
-        color: #333333 !important;
+        color: #f0f0f0 !important;
     }
     /* Make st.table and st.dataframe text dark */
     .stDataFrame, .stTable {
@@ -241,69 +162,6 @@ def generate_synthetic_stock_data(n_samples=1000, seed=42):
             price_movement = 0 if close_price > open_price else 1
         else:
             price_movement = 1 if close_price > open_price else 0
-        
-        # Store the day's data
-        data.append({
-            'Date': date_range[i],
-            'Open': round(open_price, 2),
-            'High': round(high_price, 2),
-            'Low': round(low_price, 2),
-            'Close': round(close_price, 2),
-            'Volume': volume,
-            'Price_Movement': price_movement
-        })
-        
-        # Set close as previous close for next iteration
-        prev_close = close_price
-    
-    df = pd.DataFrame(data)
-    return df
-    
-    # Base price around $100 with some randomness
-    base_price = 100
-    
-    # Generate data
-    data = []
-    prev_close = base_price
-    
-    for i in range(n_samples):
-        # Generate daily volatility (more volatile on some days)
-        volatility = np.random.uniform(0.01, 0.05)
-        
-        # Generate price components with some correlation
-        open_price = prev_close * (1 + np.random.normal(0, volatility))
-        
-        # High and low with proper constraints
-        daily_range = open_price * volatility * np.random.uniform(1, 3)
-        high_price = open_price + daily_range/2
-        low_price = open_price - daily_range/2
-        
-        # Ensure low price is not negative
-        low_price = max(low_price, 0.1)
-        
-        # Ensure high > open and low < open
-        high_price = max(high_price, open_price)
-        low_price = min(low_price, open_price)
-        
-        # Close price with some trend and mean reversion
-        momentum = np.random.normal(0, 0.01)
-        mean_reversion = (base_price - open_price) * 0.05  # Pull towards base price
-        close_price = open_price * (1 + momentum + mean_reversion)
-        
-        # Ensure close is between high and low
-        close_price = min(max(close_price, low_price), high_price)
-        
-        # Volume with some correlation to price movement
-        base_volume = np.random.randint(100000, 1000000)
-        price_change_ratio = abs(close_price - open_price) / open_price
-        volume = int(base_volume * (1 + price_change_ratio * 10))
-        
-        # Trading pattern: sometimes more, sometimes less
-        if np.random.random() < 0.1:  # 10% chance of high trading day
-            volume *= np.random.uniform(1.5, 3)
-        
-        # Price movement indicator (1 if price increased, 0 if decreased)
-        price_movement = 1 if close_price > open_price else 0
         
         # Store the day's data
         data.append({
@@ -1040,7 +898,6 @@ def main():
             except Exception as e:
                 st.error(f"Error generating prediction timeline: {str(e)}")
                 st.info("Try retraining the model with different parameters.")
-
             
             # Interpretation
             st.markdown('<h4 class="section-header">Interpretation</h4>', unsafe_allow_html=True)
@@ -1133,7 +990,7 @@ def main():
             text-align: center;
         }
         th {
-            background-color: #E3F2FD;
+            background-color: #333333;
             text-align: center;
         }
         </style>
@@ -1182,102 +1039,104 @@ def main():
         # Trading Strategy Comparison
         st.markdown('<h3 class="section-header">Trading Strategy Comparison</h3>', unsafe_allow_html=True)
         
-        # Calculate hypothetical returns
-        # For SVM: Buy if predicted Up, Sell if predicted Down
-        # For DT: Buy if predicted price > actual price, Sell otherwise
-        
-        # Select a subset of test data for visualization
-        test_subset_size = min(50, len(y_test))  # Reduced size for stability
-        test_indices = np.random.choice(range(len(y_test)), size=test_subset_size, replace=False)
-        test_indices.sort()
-        
-        # Create mapping from test indices to dates
-        # This safely handles the index alignment
-        test_data_df = df_processed.iloc[-len(y_test):]
-        if len(test_data_df) > 0:
-            test_dates = test_data_df.iloc[test_indices]['Date'].values if len(test_indices) > 0 else []
-        else:
-            # Fallback if we don't have enough processed data
-            test_dates = df.iloc[-test_subset_size:]['Date'].values
-        
-        # Check if we have enough data to calculate signals
-        if len(test_indices) > 0 and len(y_pred_class) > max(test_indices) and len(y_pred_reg) > max(test_indices):
-            # SVM trading signals
-            svm_signals = y_pred_class[test_indices]
+        # Check if we have enough data for a meaningful comparison
+        try:
+            # Select a subset of test data for visualization
+            test_subset_size = min(50, len(y_test))  # Reduced size for stability
+            test_indices = np.random.choice(range(len(y_test)), size=test_subset_size, replace=False)
+            test_indices.sort()
             
-            # Safety check for the dataframe index
-            if len(df_processed) >= len(y_test) and len(test_data_df) > 0:
-                # DT trading signals (1 if predicted price is higher than current price)
-                current_prices = test_data_df.iloc[test_indices]['Close'].values
-                dt_signals = (y_pred_reg[test_indices] > current_prices).astype(int)
-                
-                # Calculate returns for both strategies
-                if len(current_prices) > 1:  # Need at least 2 prices to calculate returns
-                    actual_returns = np.diff(current_prices) / current_prices[:-1]
-                else:
-                    actual_returns = np.array([0])  # Default to no returns if not enough data
+            # Create mapping from test indices to dates
+            # This safely handles the index alignment
+            test_data_df = df_processed.iloc[-len(y_test):]
+            if len(test_data_df) > 0:
+                test_dates = test_data_df.iloc[test_indices]['Date'].values if len(test_indices) > 0 else []
             else:
-                # Fallback to safe defaults
-                current_prices = np.array([100] * len(test_indices))
-                dt_signals = np.zeros(len(test_indices))
-                actual_returns = np.zeros(len(test_indices) - 1 if len(test_indices) > 0 else 0)
-        else:
-            # Not enough data - create empty arrays
-            svm_signals = np.array([])
-            dt_signals = np.array([])
-            actual_returns = np.array([])
-        
-        # Simulate starting with $1000
-        svm_portfolio = 1000
-        dt_portfolio = 1000
-        svm_values = [svm_portfolio]
-        dt_values = [dt_portfolio]
-        
-        # Check that we have data to simulate
-        if len(actual_returns) > 0 and len(svm_signals) > 0 and len(dt_signals) > 0:
-            # Make sure signals and returns have matching lengths
-            min_length = min(len(actual_returns), len(svm_signals), len(dt_signals))
-            actual_returns = actual_returns[:min_length]
-            svm_signals = svm_signals[:min_length]
-            dt_signals = dt_signals[:min_length]
-            
-            for i in range(len(actual_returns)):
-                # SVM strategy: If signal is 1 (Up), invest and get return
-                if i < len(svm_signals) and svm_signals[i] == 1:
-                    svm_portfolio *= (1 + actual_returns[i])
-                # DT strategy: If signal is 1 (Predicted > Current), invest and get return
-                if i < len(dt_signals) and dt_signals[i] == 1:
-                    dt_portfolio *= (1 + actual_returns[i])
+                # Fallback if we don't have enough processed data
+                test_dates = df.iloc[-test_subset_size:]['Date'].values
                 
-                svm_values.append(svm_portfolio)
-                dt_values.append(dt_portfolio)
-        
-        # Plot portfolio values
-        fig, ax = plt.subplots(figsize=(12, 6))
-        
-        # Check if we have enough data and dates to plot
-        if len(svm_values) > 0 and len(test_dates) > 0:
-            # Make sure we're not trying to plot more values than dates
-            plot_length = min(len(test_dates), len(svm_values))
+            # Check if we have enough data to calculate signals
+            if len(test_indices) > 0 and len(y_pred_class) > max(test_indices) and len(y_pred_reg) > max(test_indices):
+                # SVM trading signals
+                svm_signals = y_pred_class[test_indices]
+                
+                # Safety check for the dataframe index
+                if len(df_processed) >= len(y_test) and len(test_data_df) > 0:
+                    # DT trading signals (1 if predicted price is higher than current price)
+                    current_prices = test_data_df.iloc[test_indices]['Close'].values
+                    dt_signals = (y_pred_reg[test_indices] > current_prices).astype(int)
+                    
+                    # Calculate returns for both strategies
+                    if len(current_prices) > 1:  # Need at least 2 prices to calculate returns
+                        actual_returns = np.diff(current_prices) / current_prices[:-1]
+                    else:
+                        actual_returns = np.array([0])  # Default to no returns if not enough data
+                else:
+                    # Fallback to safe defaults
+                    current_prices = np.array([100] * len(test_indices))
+                    dt_signals = np.zeros(len(test_indices))
+                    actual_returns = np.zeros(len(test_indices) - 1 if len(test_indices) > 0 else 0)
+            else:
+                # Not enough data - create empty arrays
+                svm_signals = np.array([])
+                dt_signals = np.array([])
+                actual_returns = np.array([])
+                
+            # Simulate starting with $1000
+            svm_portfolio = 1000
+            dt_portfolio = 1000
+            svm_values = [svm_portfolio]
+            dt_values = [dt_portfolio]
             
-            ax.plot(test_dates[:plot_length], svm_values[:plot_length], 
-                   label='SVM Strategy', color='blue', linewidth=2)
-            ax.plot(test_dates[:plot_length], dt_values[:plot_length], 
-                   label='Decision Tree Strategy', color='green', linewidth=2)
-            ax.axhline(y=1000, color='red', linestyle='--', alpha=0.7, label='Initial Investment')
+            # Check that we have data to simulate
+            if len(actual_returns) > 0 and len(svm_signals) > 0 and len(dt_signals) > 0:
+                # Make sure signals and returns have matching lengths
+                min_length = min(len(actual_returns), len(svm_signals), len(dt_signals))
+                actual_returns = actual_returns[:min_length]
+                svm_signals = svm_signals[:min_length]
+                dt_signals = dt_signals[:min_length]
+                
+                for i in range(len(actual_returns)):
+                    # SVM strategy: If signal is 1 (Up), invest and get return
+                    if i < len(svm_signals) and svm_signals[i] == 1:
+                        svm_portfolio *= (1 + actual_returns[i])
+                    # DT strategy: If signal is 1 (Predicted > Current), invest and get return
+                    if i < len(dt_signals) and dt_signals[i] == 1:
+                        dt_portfolio *= (1 + actual_returns[i])
+                    
+                    svm_values.append(svm_portfolio)
+                    dt_values.append(dt_portfolio)
             
-            ax.set_title("Trading Strategy Comparison", fontsize=16)
-            ax.set_xlabel("Date", fontsize=12)
-            ax.set_ylabel("Portfolio Value ($)", fontsize=12)
-            ax.legend(loc='best')
-            ax.grid(True)
-        else:
-            # Not enough data to plot - show message
-            ax.text(0.5, 0.5, 'Not enough data to generate strategy comparison', 
-                    horizontalalignment='center', verticalalignment='center',
-                    transform=ax.transAxes, fontsize=14)
+            # Plot portfolio values
+            fig, ax = plt.subplots(figsize=(12, 6))
+            
+            # Check if we have enough data and dates to plot
+            if len(svm_values) > 0 and len(test_dates) > 0:
+                # Make sure we're not trying to plot more values than dates
+                plot_length = min(len(test_dates), len(svm_values))
+                
+                ax.plot(test_dates[:plot_length], svm_values[:plot_length], 
+                       label='SVM Strategy', color='blue', linewidth=2)
+                ax.plot(test_dates[:plot_length], dt_values[:plot_length], 
+                       label='Decision Tree Strategy', color='green', linewidth=2)
+                ax.axhline(y=1000, color='red', linestyle='--', alpha=0.7, label='Initial Investment')
+                
+                ax.set_title("Trading Strategy Comparison", fontsize=16)
+                ax.set_xlabel("Date", fontsize=12)
+                ax.set_ylabel("Portfolio Value ($)", fontsize=12)
+                ax.legend(loc='best')
+                ax.grid(True)
+            else:
+                # Not enough data to plot - show message
+                ax.text(0.5, 0.5, 'Not enough data to generate strategy comparison', 
+                        horizontalalignment='center', verticalalignment='center',
+                        transform=ax.transAxes, fontsize=14)
+                        
+            st.pyplot(fig)
         
-        st.pyplot(fig)
+        except Exception as e:
+            st.error(f"Error generating strategy comparison: {str(e)}")
+            st.info("This could be due to insufficient data or model issues.")
         
         # Final comparison and takeaways
         st.markdown('<h3 class="section-header">Key Takeaways</h3>', unsafe_allow_html=True)
@@ -1367,10 +1226,10 @@ def main():
         
         # Final CTA
         st.markdown("""
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 10px; margin-top: 30px; border: 1px solid #e0e0e0;">
+        <div style="background-color: #333333; padding: 20px; border-radius: 10px; margin-top: 30px; border: 1px solid #e0e0e0;">
         <h3 style="text-align: center; color: #0277BD;">Ready to Apply These Models to Your Trading?</h3>
-        <p style="text-align: center; color: #333333;">Experiment with different parameters, explore feature importance, and develop your own trading strategy.</p>
-        <p style="text-align: center; font-weight: bold; margin-top: 20px; color: #333333;">Navigate to the "Model Training & Evaluation" page to customize the models!</p>
+        <p style="text-align: center; color: #f0f0f0;">Experiment with different parameters, explore feature importance, and develop your own trading strategy.</p>
+        <p style="text-align: center; font-weight: bold; margin-top: 20px; color: #f0f0f0;">Navigate to the "Model Training & Evaluation" page to customize the models!</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1383,4 +1242,4 @@ def main():
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
-    main()
+    main().
