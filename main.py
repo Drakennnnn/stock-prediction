@@ -83,8 +83,16 @@ def generate_synthetic_stock_data(n_samples=1000, seed=42):
     
     # Create date range
     end_date = datetime.now().date()
-    start_date = end_date - timedelta(days=n_samples + 50)  # Add buffer for weekdays
-    date_range = pd.date_range(start=start_date, end=end_date, freq='B')[:n_samples]
+    start_date = end_date - timedelta(days=n_samples * 2)  # Add extra buffer for weekdays
+    # Ensure we have more dates than we need
+    date_range = pd.date_range(start=start_date, end=end_date, freq='B')
+    # Only take the needed number of samples, with a safety check
+    if len(date_range) >= n_samples:
+        date_range = date_range[:n_samples]
+    else:
+        # If we don't have enough business days, extend further back
+        start_date = end_date - timedelta(days=n_samples * 3)
+        date_range = pd.date_range(start=start_date, end=end_date, freq='B')[:n_samples]
     
     # Base price around $100 with some randomness
     base_price = 100
@@ -484,6 +492,21 @@ def plot_performance_comparison(svm_accuracy, dt_rmse, svm_time, dt_time):
 
 def plot_prediction_timeline(dates, actual, predicted, title="Price Prediction Timeline"):
     """Plot actual vs predicted prices over time."""
+    # Safety check - don't attempt to plot empty data
+    if len(dates) == 0 or len(actual) == 0 or len(predicted) == 0:
+        # Create an empty figure with an error message
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.text(0.5, 0.5, 'Not enough data to generate plot', 
+                horizontalalignment='center', verticalalignment='center',
+                transform=ax.transAxes, fontsize=14)
+        return fig
+    
+    # Ensure all arrays are the same length
+    min_length = min(len(dates), len(actual), len(predicted))
+    dates = dates[:min_length]
+    actual = actual[:min_length]
+    predicted = predicted[:min_length]
+    
     fig, ax = plt.subplots(figsize=(12, 6))
     
     ax.plot(dates, actual, label='Actual Prices', color='blue', linewidth=2)
@@ -983,23 +1006,45 @@ def main():
         # For DT: Buy if predicted price > actual price, Sell otherwise
         
         # Select a subset of test data for visualization
-        test_subset_size = min(100, len(y_test))
+        test_subset_size = min(50, len(y_test))  # Reduced size for stability
         test_indices = np.random.choice(range(len(y_test)), size=test_subset_size, replace=False)
         test_indices.sort()
         
-        # Extract actual dates and prices
-        test_dates = df_processed.iloc[-len(y_test):].iloc[test_indices]['Date'].values
+        # Create mapping from test indices to dates
+        # This safely handles the index alignment
+        test_data_df = df_processed.iloc[-len(y_test):]
+        if len(test_data_df) > 0:
+            test_dates = test_data_df.iloc[test_indices]['Date'].values if len(test_indices) > 0 else []
+        else:
+            # Fallback if we don't have enough processed data
+            test_dates = df.iloc[-test_subset_size:]['Date'].values
         
-        # SVM trading signals
-        svm_signals = y_pred_class[test_indices]
-        
-        # DT trading signals (1 if predicted price is higher than current price)
-        current_prices = df_processed.iloc[-len(y_test):].iloc[test_indices]['Close'].values
-        dt_signals = (y_pred_reg[test_indices] > current_prices).astype(int)
-        
-        # Calculate returns for both strategies
-        actual_returns = np.diff(df_processed.iloc[-len(y_test):].iloc[test_indices]['Close'].values) / \
-                        df_processed.iloc[-len(y_test):].iloc[test_indices]['Close'].values[:-1]
+        # Check if we have enough data to calculate signals
+        if len(test_indices) > 0 and len(y_pred_class) > max(test_indices) and len(y_pred_reg) > max(test_indices):
+            # SVM trading signals
+            svm_signals = y_pred_class[test_indices]
+            
+            # Safety check for the dataframe index
+            if len(df_processed) >= len(y_test) and len(test_data_df) > 0:
+                # DT trading signals (1 if predicted price is higher than current price)
+                current_prices = test_data_df.iloc[test_indices]['Close'].values
+                dt_signals = (y_pred_reg[test_indices] > current_prices).astype(int)
+                
+                # Calculate returns for both strategies
+                if len(current_prices) > 1:  # Need at least 2 prices to calculate returns
+                    actual_returns = np.diff(current_prices) / current_prices[:-1]
+                else:
+                    actual_returns = np.array([0])  # Default to no returns if not enough data
+            else:
+                # Fallback to safe defaults
+                current_prices = np.array([100] * len(test_indices))
+                dt_signals = np.zeros(len(test_indices))
+                actual_returns = np.zeros(len(test_indices) - 1 if len(test_indices) > 0 else 0)
+        else:
+            # Not enough data - create empty arrays
+            svm_signals = np.array([])
+            dt_signals = np.array([])
+            actual_returns = np.array([])
         
         # Simulate starting with $1000
         svm_portfolio = 1000
@@ -1007,28 +1052,49 @@ def main():
         svm_values = [svm_portfolio]
         dt_values = [dt_portfolio]
         
-        for i in range(len(actual_returns)):
-            # SVM strategy: If signal is 1 (Up), invest and get return
-            if svm_signals[i] == 1:
-                svm_portfolio *= (1 + actual_returns[i])
-            # DT strategy: If signal is 1 (Predicted > Current), invest and get return
-            if dt_signals[i] == 1:
-                dt_portfolio *= (1 + actual_returns[i])
+        # Check that we have data to simulate
+        if len(actual_returns) > 0 and len(svm_signals) > 0 and len(dt_signals) > 0:
+            # Make sure signals and returns have matching lengths
+            min_length = min(len(actual_returns), len(svm_signals), len(dt_signals))
+            actual_returns = actual_returns[:min_length]
+            svm_signals = svm_signals[:min_length]
+            dt_signals = dt_signals[:min_length]
             
-            svm_values.append(svm_portfolio)
-            dt_values.append(dt_portfolio)
+            for i in range(len(actual_returns)):
+                # SVM strategy: If signal is 1 (Up), invest and get return
+                if i < len(svm_signals) and svm_signals[i] == 1:
+                    svm_portfolio *= (1 + actual_returns[i])
+                # DT strategy: If signal is 1 (Predicted > Current), invest and get return
+                if i < len(dt_signals) and dt_signals[i] == 1:
+                    dt_portfolio *= (1 + actual_returns[i])
+                
+                svm_values.append(svm_portfolio)
+                dt_values.append(dt_portfolio)
         
         # Plot portfolio values
         fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(test_dates[:len(svm_values)], svm_values, label='SVM Strategy', color='blue', linewidth=2)
-        ax.plot(test_dates[:len(dt_values)], dt_values, label='Decision Tree Strategy', color='green', linewidth=2)
-        ax.axhline(y=1000, color='red', linestyle='--', alpha=0.7, label='Initial Investment')
         
-        ax.set_title("Trading Strategy Comparison", fontsize=16)
-        ax.set_xlabel("Date", fontsize=12)
-        ax.set_ylabel("Portfolio Value ($)", fontsize=12)
-        ax.legend(loc='best')
-        ax.grid(True)
+        # Check if we have enough data and dates to plot
+        if len(svm_values) > 0 and len(test_dates) > 0:
+            # Make sure we're not trying to plot more values than dates
+            plot_length = min(len(test_dates), len(svm_values))
+            
+            ax.plot(test_dates[:plot_length], svm_values[:plot_length], 
+                   label='SVM Strategy', color='blue', linewidth=2)
+            ax.plot(test_dates[:plot_length], dt_values[:plot_length], 
+                   label='Decision Tree Strategy', color='green', linewidth=2)
+            ax.axhline(y=1000, color='red', linestyle='--', alpha=0.7, label='Initial Investment')
+            
+            ax.set_title("Trading Strategy Comparison", fontsize=16)
+            ax.set_xlabel("Date", fontsize=12)
+            ax.set_ylabel("Portfolio Value ($)", fontsize=12)
+            ax.legend(loc='best')
+            ax.grid(True)
+        else:
+            # Not enough data to plot - show message
+            ax.text(0.5, 0.5, 'Not enough data to generate strategy comparison', 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=ax.transAxes, fontsize=14)
         
         st.pyplot(fig)
         
