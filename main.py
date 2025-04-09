@@ -51,6 +51,9 @@ st.markdown("""
         padding: 15px;
         box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
     }
+    .metric-card * {
+        color: #333333 !important;
+    }
     .green-text {
         color: green !important;
         font-weight: bold;
@@ -66,6 +69,9 @@ st.markdown("""
         border: 1px solid #e0e0e0;
         margin: 10px 0;
     }
+    .highlight p, .highlight li, .highlight ul, .highlight ol {
+        color: #333333 !important;
+    }
     .comparison-table {
         width: 100%;
         text-align: center;
@@ -73,21 +79,12 @@ st.markdown("""
     .comparison-table th {
         background-color: #f5f5f5;
     }
-    /* Override Streamlit default styling */
-    .css-1kyxreq {
-        background-color: #ffffff !important;
-    }
-    /* Ensure text is always visible */
-    p, li, h1, h2, h3, h4, span, div {
+    .comparison-table th, .comparison-table td {
         color: #333333 !important;
     }
-    /* Ensure contrast for tables */
-    table {
+    /* Make st.table and st.dataframe text dark */
+    .stDataFrame, .stTable {
         color: #333333 !important;
-        background-color: #ffffff !important;
-    }
-    th {
-        background-color: #f0f0f0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
