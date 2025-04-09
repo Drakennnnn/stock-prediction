@@ -1,4 +1,83 @@
-import streamlit as st
+@st.cache_data
+def generate_synthetic_stock_data(n_samples=1000, seed=42):
+    """Generate synthetic stock data for prediction models."""
+    np.random.seed(seed)
+    
+    # Create date range
+    end_date = datetime.now().date()
+    start_date = end_date - timedelta(days=n_samples * 2)  # Add extra buffer for weekdays
+    # Ensure we have more dates than we need
+    date_range = pd.date_range(start=start_date, end=end_date, freq='B')
+    # Only take the needed number of samples, with a safety check
+    if len(date_range) >= n_samples:
+        date_range = date_range[:n_samples]
+    else:
+        # If we don't have enough business days, extend further back
+        start_date = end_date - timedelta(days=n_samples * 3)
+        date_range = pd.date_range(start=start_date, end=end_date, freq='B')[:n_samples]
+    
+    # Base price around $100 with some randomness
+    base_price = 100
+    
+    # Generate data
+    data = []
+    prev_close = base_price
+    
+    for i in range(n_samples):
+        # Generate daily volatility (more volatile on some days)
+        volatility = np.random.uniform(0.01, 0.05)
+        
+        # Generate price components with some correlation
+        open_price = prev_close * (1 + np.random.normal(0, volatility))
+        
+        # High and low with proper constraints
+        daily_range = open_price * volatility * np.random.uniform(1, 3)
+        high_price = open_price + daily_range/2
+        low_price = open_price - daily_range/2
+        
+        # Ensure low price is not negative
+        low_price = max(low_price, 0.1)
+        
+        # Ensure high > open and low < open
+        high_price = max(high_price, open_price)
+        low_price = min(low_price, open_price)
+        
+        # Close price with some trend and mean reversion
+        momentum = np.random.normal(0, 0.01)
+        mean_reversion = (base_price - open_price) * 0.05  # Pull towards base price
+        close_price = open_price * (1 + momentum + mean_reversion)
+        
+        # Ensure close is between high and low
+        close_price = min(max(close_price, low_price), high_price)
+        
+        # Volume with some correlation to price movement
+        base_volume = np.random.randint(100000, 1000000)
+        price_change_ratio = abs(close_price - open_price) / open_price
+        volume = int(base_volume * (1 + price_change_ratio * 10))
+        
+        # Trading pattern: sometimes more, sometimes less
+        if np.random.random() < 0.1:  # 10% chance of high trading day
+            volume *= np.random.uniform(1.5, 3)
+        
+        # Price movement indicator (1 if price increased, 0 if decreased)
+        price_movement = 1 if close_price > open_price else 0
+        
+        # Store the day's data
+        data.append({
+            'Date': date_range[i],
+            'Open': round(open_price, 2),
+            'High': round(high_price, 2),
+            'Low': round(low_price, 2),
+            'Close': round(close_price, 2),
+            'Volume': volume,
+            'Price_Movement': price_movement
+        })
+        
+        # Set close as previous close for next iteration
+        prev_close = close_price
+    
+    df = pd.DataFrame(data)
+    return dfimport streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -92,22 +171,36 @@ st.markdown("""
 # ------------------- Data Generation Functions -------------------
 
 @st.cache_data
-def generate_synthetic_stock_data(n_samples=1000, seed=42):
-    """Generate synthetic stock data for prediction models."""
-    np.random.seed(seed)
-    
-    # Create date range
-    end_date = datetime.now().date()
-    start_date = end_date - timedelta(days=n_samples * 2)  # Add extra buffer for weekdays
-    # Ensure we have more dates than we need
-    date_range = pd.date_range(start=start_date, end=end_date, freq='B')
-    # Only take the needed number of samples, with a safety check
-    if len(date_range) >= n_samples:
-        date_range = date_range[:n_samples]
-    else:
-        # If we don't have enough business days, extend further back
-        start_date = end_date - timedelta(days=n_samples * 3)
-        date_range = pd.date_range(start=start_date, end=end_date, freq='B')[:n_samples]
+def fetch_stock_data(ticker="AAPL", period="2y"):
+    """Fetch real stock data from Yahoo Finance API."""
+    try:
+        import yfinance as yf
+        
+        # Download the stock data
+        stock = yf.Ticker(ticker)
+        df = stock.history(period=period)
+        
+        # Reset index to make Date a column
+        df.reset_index(inplace=True)
+        
+        # Rename columns to match our expected format
+        df.rename(columns={
+            'Date': 'Date',
+            'Open': 'Open',
+            'High': 'High',
+            'Low': 'Low',
+            'Close': 'Close',
+            'Volume': 'Volume'
+        }, inplace=True)
+        
+        # Add Price_Movement column (1 if price went up, 0 if down)
+        df['Price_Movement'] = (df['Close'] > df['Open']).astype(int)
+        
+        return df
+    except Exception as e:
+        # If there's an error, fall back to synthetic data
+        st.error(f"Error fetching stock data: {str(e)}. Falling back to synthetic data.")
+        return generate_synthetic_stock_data(n_samples=500)  # Smaller sample as fallback
     
     # Base price around $100 with some randomness
     base_price = 100
@@ -560,13 +653,22 @@ def main():
         ["📊 Data Overview", "🔍 Data Exploration", "🤖 Model Training & Evaluation", "📈 Performance Comparison", "📝 Conclusion"]
     )
     
-    # Generate dataset
-    if 'df' not in st.session_state:
-        with st.spinner('Generating synthetic stock data...'):
-            st.session_state.df = generate_synthetic_stock_data(n_samples=1000)
+    # Sidebar for stock selection
+    st.sidebar.title("Stock Settings")
+    ticker = st.sidebar.text_input("Stock Ticker", value="AAPL")
+    period = st.sidebar.selectbox(
+        "Time Period", 
+        options=["1y", "2y", "5y", "10y", "max"],
+        index=1
+    )
+    
+    # Fetch real stock data
+    if 'df' not in st.session_state or st.sidebar.button("Fetch Data"):
+        with st.spinner(f'Fetching {ticker} stock data...'):
+            st.session_state.df = fetch_stock_data(ticker, period)
     
     # Preprocess data
-    if 'df_processed' not in st.session_state:
+    if 'df_processed' not in st.session_state or st.sidebar.button("Reprocess Data"):
         with st.spinner('Preprocessing data...'):
             st.session_state.df_processed = preprocess_data(st.session_state.df)
     
@@ -983,7 +1085,7 @@ def main():
             text-align: center;
         }
         th {
-            background-color: #333333;
+            background-color: #E3F2FD;
             text-align: center;
         }
         </style>
