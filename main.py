@@ -983,7 +983,7 @@ def main():
             text-align: center;
         }
         th {
-            background-color: #E3F2FD;
+            background-color: #333333;
             text-align: center;
         }
         </style>
