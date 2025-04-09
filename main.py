@@ -52,24 +52,42 @@ st.markdown("""
         box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
     }
     .green-text {
-        color: green;
+        color: green !important;
         font-weight: bold;
     }
     .red-text {
-        color: red;
+        color: red !important;
         font-weight: bold;
     }
     .highlight {
-        background-color: #E3F2FD;
-        padding: 5px;
-        border-radius: 3px;
+        background-color: #f9f9f9 !important;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #e0e0e0;
+        margin: 10px 0;
     }
     .comparison-table {
         width: 100%;
         text-align: center;
     }
     .comparison-table th {
-        background-color: #E3F2FD;
+        background-color: #f5f5f5;
+    }
+    /* Override Streamlit default styling */
+    .css-1kyxreq {
+        background-color: #ffffff !important;
+    }
+    /* Ensure text is always visible */
+    p, li, h1, h2, h3, h4, span, div {
+        color: #333333 !important;
+    }
+    /* Ensure contrast for tables */
+    table {
+        color: #333333 !important;
+        background-color: #ffffff !important;
+    }
+    th {
+        background-color: #f0f0f0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -849,17 +867,33 @@ def main():
             # Prediction Timeline
             st.markdown('<h4 class="section-header">Prediction Timeline</h4>', unsafe_allow_html=True)
             
-            # Get a subset of dates for visualization
-            test_indices = np.random.choice(range(len(y_test_reg)), size=min(50, len(y_test_reg)), replace=False)
-            test_indices.sort()
-            
-            # Extract actual dates from original dataframe
-            dates = df_processed.iloc[-len(y_test_reg):].iloc[test_indices]['Date'].values
-            actuals = y_test_reg[test_indices]
-            predictions = y_pred_reg[test_indices]
-            
-            fig = plot_prediction_timeline(dates, actuals, predictions, "Decision Tree: Price Prediction Timeline")
-            st.pyplot(fig)
+            # Get a subset of dates for visualization - carefully handle indexing
+            try:
+                # Handle test indices safely
+                if len(y_test_reg) > 0:
+                    # Use a smaller sample size for stability
+                    sample_size = min(30, len(y_test_reg))
+                    # Use sequential indices instead of random to avoid indexing issues
+                    test_indices = list(range(sample_size))
+                    
+                    # Get dates from the processed dataframe's tail
+                    date_df = df_processed.iloc[-len(y_test_reg):]
+                    # Only proceed if we have enough data
+                    if len(date_df) >= sample_size:
+                        dates = date_df.iloc[:sample_size]['Date'].values
+                        actuals = y_test_reg[:sample_size]
+                        predictions = y_pred_reg[:sample_size]
+                        
+                        fig = plot_prediction_timeline(dates, actuals, predictions, "Decision Tree: Price Prediction Timeline")
+                        st.pyplot(fig)
+                    else:
+                        st.info("Not enough processed data to generate prediction timeline.")
+                else:
+                    st.info("Test dataset is empty. Cannot generate prediction timeline.")
+            except Exception as e:
+                st.error(f"Error generating prediction timeline: {str(e)}")
+                st.info("Try retraining the model with different parameters.")
+
             
             # Interpretation
             st.markdown('<h4 class="section-header">Interpretation</h4>', unsafe_allow_html=True)
@@ -1186,10 +1220,10 @@ def main():
         
         # Final CTA
         st.markdown("""
-        <div style="background-color: #E3F2FD; padding: 20px; border-radius: 10px; margin-top: 30px;">
+        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 10px; margin-top: 30px; border: 1px solid #e0e0e0;">
         <h3 style="text-align: center; color: #0277BD;">Ready to Apply These Models to Your Trading?</h3>
-        <p style="text-align: center;">Experiment with different parameters, explore feature importance, and develop your own trading strategy.</p>
-        <p style="text-align: center; font-weight: bold; margin-top: 20px;">Navigate to the "Model Training & Evaluation" page to customize the models!</p>
+        <p style="text-align: center; color: #333333;">Experiment with different parameters, explore feature importance, and develop your own trading strategy.</p>
+        <p style="text-align: center; font-weight: bold; margin-top: 20px; color: #333333;">Navigate to the "Model Training & Evaluation" page to customize the models!</p>
         </div>
         """, unsafe_allow_html=True)
         
