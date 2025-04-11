@@ -178,6 +178,8 @@ def generate_synthetic_stock_data(n_samples=1000, seed=42):
         prev_close = close_price
     
     df = pd.DataFrame(data)
+    # Ensure Date is stored as string
+    df['Date'] = df['Date'].astype(str)
     return df
 
 @st.cache_data
@@ -205,6 +207,9 @@ def preprocess_data(df):
     
     # Drop NaN values created by shifts and rolling windows
     df = df.dropna()
+    
+    # Ensure Date is stored as string
+    df['Date'] = df['Date'].astype(str)
     
     return df
 
@@ -949,8 +954,7 @@ def main():
         dt_model = st.session_state.dt_model
         svm_time = st.session_state.svm_time
         dt_time = st.session_state.dt_time
-        
-        # Make predictions
+
         y_pred_class = svm_model.predict(X_test)
         y_pred_reg = dt_model.predict(X_test_reg)
         
