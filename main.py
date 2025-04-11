@@ -172,7 +172,7 @@ def generate_synthetic_stock_data(n_samples=1000, seed=42):
             'Close': round(close_price, 2),
             'Volume': volume,
             'Price_Movement': price_movement
-        })v
+        })
         
         # Set close as previous close for next iteration
         prev_close = close_price
