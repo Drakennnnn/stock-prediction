@@ -165,14 +165,14 @@ def generate_synthetic_stock_data(n_samples=1000, seed=42):
         
         # Store the day's data
         data.append({
-            'Date': date_range[i],
+            'Date': date_range[i].strftime('%Y-%m-%d'),  # Convert to string right at creation
             'Open': round(open_price, 2),
             'High': round(high_price, 2),
             'Low': round(low_price, 2),
             'Close': round(close_price, 2),
             'Volume': volume,
             'Price_Movement': price_movement
-        })
+        })v
         
         # Set close as previous close for next iteration
         prev_close = close_price
