@@ -601,10 +601,11 @@ def main():
         
         # Dataset preview
         st.markdown('<h3 class="section-header">Dataset Preview</h3>', unsafe_allow_html=True)
-        st.dataframe(df.head(10))
-        
+        df_display = df.copy()
+        df_display['Date'] = df_display['Date'].astype(str)
+        st.dataframe(df_display.head(10))
+
         col1, col2 = st.columns(2)
-        
         with col1:
             st.markdown('<h3 class="section-header">Dataset Statistics</h3>', unsafe_allow_html=True)
             st.dataframe(df.describe())
@@ -628,7 +629,9 @@ def main():
         
         # Select a subset of columns for easier viewing
         display_cols = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'MA_5', 'MA_10', 'RSI', 'MACD']
-        st.dataframe(df_processed[display_cols].head(10))
+        df_display = df_processed[display_cols].copy()
+        df_display['Date'] = df_display['Date'].astype(str)
+        st.dataframe(df_display.head(10))
         
         # Feature correlation
         st.markdown('<h3 class="section-header">Feature Correlation Matrix</h3>', unsafe_allow_html=True)
